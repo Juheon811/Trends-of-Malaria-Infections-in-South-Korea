@@ -1,0 +1,378 @@
+---
+title: "CDS-301-K01 Group 5 Final Project"
+author: "Woohyun Song & Juheon Kim"
+date: "December 17 2024"
+output:
+  html_document:
+    css: assets/rany_style.css
+    df_print: paged
+    highlight: tango
+    theme: cosmo
+    toc: true
+    toc_float:
+      collapsed: true
+    number_sections: false
+  pdf_document:
+    toc: true
+---
+options(curl_http_version = 0)
+
+.meta-info {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 16px;
+}
+.meta-info i {
+  margin-right: 8px;
+  color: gray;
+}
+
+
+```{r warning = FALSE, message = FALSE, echo = FALSE}
+library(sf)
+library(ggplot2)
+library(gganimate)
+library(dplyr)
+library(readr)
+library(tidyr)
+library(plotly)
+library(tidyverse)
+library(echarts4r)
+library(geojsonsf)
+```
+
+
+Title: Trends of Malaria Infections in South Korea
+Author: Woohyun Song & Juheon Kim
+Published: 
+
+Abstract
+
+
+1. Global Malaria Overview
+
+Due to climate change, the activity of mosquitoes is increasing, and malaria is emerging as a serious problem worldwide. The World Health Organization (WHO) has announced that there will be 249 million cases of malaria worldwide in 2022, a 6.9% increase from 2019, before the COVID-19 pandemic. This has made it more difficult to eradicate malaria, the WHO warned.
+
+2. Analysis of Malaria Trends in Neighboring Countries
+
+At first, we tried to find countries that were as close to Korea as possible. However, after research, we found that malaria did not occur in Japan or Russia. In addition, China has not had any cases of malaria for four consecutive years since 2017. For these reasons, we chose Cambodia, Laos, the Philippines, Thailand, and Vietnam, which are closest to South Korea and have data on malaria cases, using the Malaria Atlas Project (link).
+
+The original data provided the number of cases per 1,000 people. To calculate the actual number of malaria infections, the population of each country was multiplied and divided by 1,000.
+
+
+# 1. Malaria Incidence Rates of Countries Around Korea
+## Line Graph
+
+```{r warning = FALSE, message = FALSE, echo = FALSE}
+data <- read.csv("Countries Around Korea.csv")
+
+around_korea <- ggplot(data, aes(x = Year, y = Malaria.Cases, group = Name)) +
+  geom_line(data = data %>% filter(Name != "South Korea"), 
+            aes(color = Name), 
+            linetype = "dotted", size = 1.5, alpha = 0.6) + 
+  geom_line(data = data %>% filter(Name == "South Korea"), 
+            aes(color = Name), 
+            size = 1.4, alpha = 0.9) +
+  scale_color_manual(
+    values = c(
+      "Cambodia" = "purple",
+      "Laos" = "blue",
+      "Philippines" = "darkgreen",
+      "South Korea" = "black",
+      "Thailand" = "red",
+      "Vietnam" = "darkcyan"
+    )
+  ) +
+  labs(
+    title = "Incidence Cases of Countries Around Korea",
+    x = "Year",
+    y = "Cases",
+    color = "Country",
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+    axis.title = element_text(size = 14),
+    legend.position = "right",
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10)
+  )
+
+around_korea
+```
+
+
+Neighboring countries showed a decreasing trend of malaria cases, but South Korea did not have much change and stayed stable. However, after 2021, there was a slight increase. Specifically, in Cambodia and Laos, incidence rates sharply declined from 2018, reaching near zero by 2022. The Philippines showed a slower decline, while Thailand saw a slight increase before stabilizing after 2020. Vietnam remained stable at low levels, and South Korea consistently maintained very low rates.Overall, most countries showed declining trends, especially Cambodia and Laos, while South Korea's strong public health system kept its rates low and stable.
+
+
+3. Why we select the South Korea?
+
+Because of the slight increase in the South Korea and this trend highlights the need for closer analysis and better prevention strategies, so we decided to analyze it more closely. Also, the Korea Centers for Disease Control and Prevention recently announced that the number of malaria infections is on the rise and is expected to reach 650 this year.
+
+For our South Korea-specific analysis, we used data from the Infectious Disease Portal spanning from 2001 to 2023. 
+
+# 2. Number of malaria infections by 'Seoul','Gyeonggi','Gangwon','Incheon'(2001-2023)
+## Line Graph
+
+```{r warning = FALSE, message = FALSE, echo = FALSE}
+korea_line <- read_csv("Number of malaria infections.csv", locale = locale(encoding = "CP949"))
+
+korea_long <- korea_line %>%
+  pivot_longer(
+    cols = starts_with("20"),
+    names_to = "Year",    
+    values_to = "Infections"
+  ) %>%
+  mutate(
+    Policy = case_when(
+      Year == "2004" ~ "Military and civilian control strengthened",
+      Year == "2011" ~ "Mosquito surveillance enhanced",
+      Year == "2019" ~ "The First Basic Plan (Rapid diagnostic kits introduced)",
+      TRUE ~ NA_character_
+    ),
+    tooltip = ifelse(
+      is.na(Policy),
+      paste("Year:", Year, "<br>Infections:", Infections),
+      paste("Year:", Year, "<br>Infections:", Infections, "<br>Policy:", Policy)
+    )
+  )
+
+korea_line2 <- ggplot() +
+  geom_col(
+    data = korea_long %>% filter(Country == "전국"),
+    aes(x = as.integer(Year), y = Infections, fill = "전국"),
+    alpha = 0.6,
+    show.legend = FALSE
+  ) +
+  geom_line(
+    data = korea_long %>% filter(Country != "전국"),
+    aes(x = as.integer(Year), y = Infections, color = Country),
+    size = 1
+  ) +
+  geom_point(
+    data = korea_long %>% filter(Country != "전국"),
+    aes(x = as.integer(Year), y = Infections, color = Country, text = tooltip),
+    size = 2
+  ) +
+  scale_fill_manual(
+    name = "Country",
+    values = c("전국" = "grey80")
+  ) +
+  scale_color_discrete(name = "Country") +
+  labs(
+    title = "Malaria Infections in South Korea (2001-2023)",
+    x = "Year",
+    y = "Number of Infections"
+  ) +
+  theme_minimal(base_family = "nanumgothic") +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    axis.text = element_text(size = 10),
+    axis.title = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    legend.title = element_text(size = 12)
+  )
+
+korea_linegraph <- ggplotly(korea_line2, tooltip = "text")
+
+trace_names <- c("전국", "강원", "경기", "서울", "인천")
+for (i in seq_along(korea_linegraph$x$data)) {
+  korea_linegraph$x$data[[i]]$name <- trace_names[i]
+}
+
+korea_linegraph
+```
+
+
+# 3. Number of malaria infections by city, county and district, 2001-2023 
+## Gapminder Annimation
+
+
+```{r warning = FALSE, message = FALSE, echo = FALSE}
+# We loaded .json file to .sf object because we have to merge with malaria data
+
+geojson_sigungu <- st_read("sig2.json") 
+st_crs(geojson_sigungu)
+
+malaria_data <- read.csv("Number of malaria infections by city, county and district, 2001-2023.csv", 
+                         fileEncoding = "CP949")
+colnames(malaria_data)[1:2] <- c("City", "SIG_KOR_NM")
+
+malaria_data <- malaria_data %>%
+  pivot_longer(
+    cols = starts_with("X"),
+    names_to = "Year",
+    values_to = "Infections"
+  ) %>%
+  mutate(
+    Year = as.numeric(gsub("X", "", Year))
+  )
+
+
+
+malaria_data2 <- malaria_data %>%
+  mutate(
+    Year_Group = case_when(
+      Year >= 2001 & Year <= 2004 ~ "2001-2004",
+      Year >= 2005 & Year <= 2009 ~ "2005-2009",
+      Year >= 2010 & Year <= 2017 ~ "2010-2017",
+      Year >= 2018 & Year <= 2023 ~ "2018-2023",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  group_by(City, SIG_KOR_NM, Region_Code, Year_Group) %>%
+  summarise(
+    Avg_Infections = round(mean(Infections, na.rm = TRUE), 2)
+  )
+
+
+
+# Made a new column of Region_Code in the geojson_sigungu file
+geojson_sigungu <- geojson_sigungu %>%      
+  mutate(Region_Code = substr(name, 1, 2)) 
+
+# Values in the Region_Code column above was character, so we changed it to the integer.
+# It is because the values of Region_Code column in the malaria data is integer.
+
+geojson_sigungu <- geojson_sigungu %>%
+  mutate(Region_Code = as.integer(Region_Code))
+
+
+# Merged malaria_data and geojson_sigungu
+merged_data <- merge(geojson_sigungu, malaria_data2, by = c("Region_Code", "SIG_KOR_NM"))
+
+
+
+# sf to geojson
+geojson_sigungu2 <- sf_geojson(geojson_sigungu)
+
+
+MIN <- min(merged_data$Avg_Infections, na.rm = TRUE)
+MAX <- max(merged_data$Avg_Infections, na.rm = TRUE)
+merged_data <- merged_data %>%
+  mutate(Avg_Infections = ifelse(is.na(Avg_Infections), 0, Avg_Infections),
+         Year_Group = as.factor(Year_Group)) %>%
+  arrange(Year_Group, name)
+
+merged_data <- merged_data %>%
+  mutate(Year_Group = factor(Year_Group, levels = c("2001-2004", "2005-2009", "2010-2017", "2018-2023")))
+```
+
+```{r}
+merged_data %>%
+  group_by(Year_Group) %>%
+  e_charts(name, timeline = TRUE) %>%
+  e_map_register("Korea", json = geojson_sigungu2) %>%
+  e_map(Avg_Infections, map = "Korea",roam = TRUE) %>%
+  e_add_nested("label", SIG_KOR_NM, SIG_ENG_NM) %>% 
+  e_visual_map(
+    min = MIN,
+    max = MAX,
+  ) %>%
+  e_title("South Korea Malaria Trend (2001-2023)", left = "center") %>%
+  e_tooltip(
+    formatter = htmlwidgets::JS("
+      function(params){
+        return('<strong>' + params.data.label.SIG_KOR_NM + 
+              ' (' + params.data.label.SIG_ENG_NM + ')' +
+              '</strong><br />SIG_CD: ' + params.name +
+              '</strong><br />Infection: ' + params.value) 
+                }
+    ")
+  ) %>%
+  e_timeline_opts(playInterval = 1000)
+```
+
+
+# 4. Number of malaria infections by 'Seoul','Gyeonggi','Gangwon','Incheon'(2001-2023)
+## Gapminder Annimation
+
+```{r warning = FALSE, message = FALSE, echo = FALSE}
+geojson_sigungu <- st_read("sig2.json") 
+st_crs(geojson_sigungu)
+
+malaria_data <- read.csv("Number of malaria infections by city, county and district, 2001-2023.csv", 
+                         fileEncoding = "CP949")
+colnames(malaria_data)[1:2] <- c("City", "SIG_KOR_NM")
+
+malaria_data <- malaria_data %>%
+  pivot_longer(
+    cols = starts_with("X"),
+    names_to = "Year",
+    values_to = "Infections"
+  ) %>%
+  mutate(
+    Year = as.numeric(gsub("X", "", Year))
+  )
+
+malaria_data2 <- malaria_data %>%
+  mutate(
+    Year_Group = case_when(
+      Year >= 2001 & Year <= 2004 ~ "2001-2004",
+      Year >= 2005 & Year <= 2009 ~ "2005-2009",
+      Year >= 2010 & Year <= 2017 ~ "2010-2017",
+      Year >= 2018 & Year <= 2023 ~ "2018-2023",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  group_by(City, SIG_KOR_NM, Region_Code, Year_Group) %>%
+  summarise(
+    Avg_Infections = round(mean(Infections, na.rm = TRUE), 2)
+  )
+
+
+geojson_sigungu <- geojson_sigungu %>%      
+  mutate(Region_Code = substr(name, 1, 2)) %>%
+  mutate(Region_Code = as.integer(Region_Code))
+
+geojson_filtered <- geojson_sigungu %>%
+  filter(Region_Code %in% c("11", "41", "51", "28")) %>%
+  sf_geojson()
+
+
+merged_data <- merge(geojson_sigungu, malaria_data2, by = c("Region_Code", "SIG_KOR_NM"))
+
+merged_data <- merged_data %>%
+  mutate(Avg_Infections = ifelse(is.na(Avg_Infections), 0, Avg_Infections),
+         Year_Group = as.factor(Year_Group)) %>%
+  arrange(Year_Group, name)
+
+merged_data <- merged_data %>%
+  mutate(Year_Group = factor(Year_Group, levels = c("2001-2004", "2005-2009", "2010-2017", "2018-2023")))
+
+
+filtered_data <- merged_data %>%
+  filter(City %in% c("서울", "경기", "강원", "인천"))
+
+
+
+MIN <- min(filtered_data$Avg_Infections, na.rm = TRUE)
+MAX <- max(filtered_data$Avg_Infections, na.rm = TRUE)
+
+filtered_data %>%
+  group_by(Year_Group) %>%
+  e_charts(name, timeline = TRUE) %>%
+  e_map_register("Filtered_Korea", json = geojson_filtered) %>%  
+  e_map(Avg_Infections, map = "Filtered_Korea", roam = TRUE) %>% 
+  e_add_nested("label", SIG_KOR_NM, SIG_ENG_NM) %>%
+  e_visual_map(
+    min = MIN,
+    max = MAX
+  ) %>%
+  e_title("Malaria Trend in Seoul, Gyeonggi, Gangwon, Incheon (2001-2023)", left = "center") %>%
+  e_tooltip(
+    formatter = htmlwidgets::JS("
+      function(params){
+        return('<strong>' + params.data.label.SIG_KOR_NM + 
+              ' (' + params.data.label.SIG_ENG_NM + ')' +
+              '</strong><br />SIG_CD: ' + params.name +
+              '</strong><br />Infection: ' + params.value) 
+                }
+    ")
+  ) %>%
+  e_timeline_opts(playInterval = 1000)
+```
+
+
